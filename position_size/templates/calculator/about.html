@@ -1,0 +1,19 @@
+{% extends 'calculator/base.html' %}
+{% block content %}
+
+
+  <h4 style="text-align:center">Simple web calculator that returns the correct position size when buying stock shares.</h4>
+    <br><ul class="bull">
+      <li>Choose the currency value of your account.</li>
+      <li>Type in the size of your account (Equity).</li>
+      <li>Risk ratio rappresents the risk that you are willing to take per trade calculated in % of the total amount.</li>
+      <li>Stop loss in $ is how many dollars below the initial price you plan to close the trade in case of loss.</li>
+      <li>"Stocks" gives you the option to choose from a dropdown menu list the stock you are interested in.</li>
+      <li>After pressing "Calculate" you will get the amount of shares you need to buy in order to risk the amount you planed.</li>
+    </ul></br>
+    <div style="text-align:center">
+      <a href="{% url 'index' %}"><input type="submit" class="btn btn-primary"  value="Try it now!"></a>
+    </div>
+
+
+{% endblock %}
