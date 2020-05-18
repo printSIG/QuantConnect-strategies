@@ -1,3 +1,7 @@
+#Python Script that tracks price of Amazon products and sends email whenever they reache the requested value.    
+    
+    
+    
     from bs4 import BeautifulSoup
     import requests
     import smtplib
