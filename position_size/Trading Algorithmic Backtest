@@ -1,0 +1,79 @@
+#SMA Crossover Backtest on Forex market.
+
+# This is an automatic backtest ran on the Forex market. 
+#It runs over two pairs and executes a trade whenever the 50 SimpleMovingAverage indicator crosses the 200 SimpleMovingAverage indicator.
+#The code is build using the QuantConnect API.
+
+from datetime import timedelta
+
+class MovingAverageCrossAlgorithm(QCAlgorithm):
+
+    def Initialize(self):
+        '''Initialise the data and resolution required, as well as the cash and start-end dates for your algorithm. All algorithms must initialized.'''
+        
+        self.SetStartDate(2020, 1, 1)                                                                                   #Set Start Date
+        self.SetEndDate(2020, 12, 31)                                                                                   #Set End Date
+        self.SetCash(100000)                                                                                            #Set Strategy Cash
+        
+        self.currencies = ["EURUSD","NZDUSD"]
+        self.Data = {}
+        
+        for ticker in self.currencies:
+            symbol = self.AddForex(ticker, Resolution.Hour).Symbol                                                      #Making currency subscription and storing them
+            self.Data[symbol] = SymbolData(self.SMA(symbol, 50, Resolution.Hour),                                       #in a dictionary.
+                                            self.SMA(symbol, 200, Resolution.Hour))
+            
+        self.SetWarmUp(203)                                                                                             #Adding previous data to the 200 SMA indicator.
+        self.quant = 100000
+            
+     
+    
+    def OnData(self, data):
+        if self.IsWarmingUp:
+            return
+        
+        for symbol, symbolData in self.Data.items():                                                                     #Accessing dictionary values and assigning them to variables
+            fastPastValue = symbolData.fastSMAWindow[1].Value
+            slowPastValue = symbolData.slowSMAWindow[1].Value
+            fast = symbolData.fast.Current.Value
+            slow = symbolData.slow.Current.Value
+            
+            if self.Portfolio[symbol]:                                                                                   #Main logic operations to run the strategy
+                price = data[symbol].Close
+                if fast > slow  and fastPastValue < slow:
+                    self.MarketOrder(symbol, self.quant)
+                    self.StopMarketOrder(symbol, -self.quant, (price* 0.99))
+                    self.LimitOrder(symbol, -self.quant, (price * 1.02))
+            
+        
+       
+    def OnOrderEvent(self, orderEvent):                                                                                  #Method build in order to manipulate different ticket orders.
+        order = self.Transactions.GetOrderById(orderEvent.OrderId)
+        if order.Status == OrderStatus.Filled:
+            if order.Type == OrderType.Limit or order.Type == OrderType.Limit:
+                self.Transactions.CancelOpenOrders(order.Symbol)
+                        
+        if order.Status == OrderStatus.Canceled:
+            self.Log(str(orderEvent))
+    
+    
+class SymbolData:                                                                                                        #Object created in order to create a RollingWIndow for the
+                                                                                                                         #indicators and updated them with new values
+    def __init__(self, fast, slow):
+        self.fast = fast
+        self.slow = slow
+        self.fastSMAWindow = RollingWindow[IndicatorDataPoint](2)
+        self.fast.Updated += self.FastSmaUpdated
+        self.slowSMAWindow = RollingWindow[IndicatorDataPoint](3)
+        self.slow.Updated += self.SlowSmaUpdated
+            
+    def FastSmaUpdated(self, sender, updated):
+        if self.fast.IsReady:
+            self.fastSMAWindow.Add(updated)
+                
+    def SlowSmaUpdated(self, sender, updated):
+        if self.slow.IsReady:
+            self.slowSMAWindow.Add(updated)
+
+
+
