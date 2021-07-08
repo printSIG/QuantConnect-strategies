@@ -2,7 +2,7 @@
 
 # This is an automatic backtest ran on the Forex market. 
 #It runs over two pairs and executes a trade whenever the 50 SimpleMovingAverage indicator crosses the 200 SimpleMovingAverage indicator.
-#The code is build using the QuantConnect API.
+#The code is build using the QuantConnect Console.
 
 from datetime import timedelta
 
