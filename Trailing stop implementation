@@ -1,0 +1,99 @@
+This strategy is an example of trailing-stop implementation.
+The strategy will autmatically move our stop loss if the trade moves in our direction, that is: between our entry and our stop loss there will always be a difference of at least 25 pips.
+
+
+from datetime import timedelta
+class PensiveFluorescentPinkCaterpillar(QCAlgorithm):
+
+    def Initialize(self):
+        self.SetTimeZone("Europe/Berlin")
+        self.SetStartDate(2021, 5, 1)
+        self.SetCash(1000) 
+        #self.AddForex("SPY", Resolution.Minute)
+        self.lastOrderEvent = None
+        self.highestSYMBprice = 0 
+        self.lowestSYMBprice = 200
+        rsi_period = 6
+        
+        
+        Min_con = QuoteBarConsolidator(timedelta(minutes=15))
+        Min_con.DataConsolidated += self.On_min
+        
+        
+        self.tickers = ['EURUSD']
+        
+        for ticker in self.tickers:
+            symbol = self.AddForex(ticker, Resolution.Minute).Symbol
+            self.rsi = self.RSI(symbol, rsi_period)
+            self.min_rsi = RelativeStrengthIndex(ticker, rsi_period)
+            
+            self.RegisterIndicator(ticker, self.min_rsi, Min_con)
+            self.SubscriptionManager.AddConsolidator(ticker, Min_con)
+        
+        self.overBought = 80
+        self.overSold = 20
+            
+        self.SetWarmUp(200)
+        
+    def On_min(self, sender, bar):
+        self.Plot('RSI', '15min', self.min_rsi.Current.Value)
+
+    def OnData(self, data):
+        if not self.rsi.IsReady: 
+            return
+        
+        for symbol in self.tickers:
+            rsi_value1 = self.rsi.Current.Value
+            rsi_value2 = self.min_rsi.Current.Value
+            price = data[symbol].Close
+            
+            margin = self.Portfolio.MarginRemaining
+            risk = 0.01
+            pipvalue = (margin * risk) / 20
+            orderSize = pipvalue / 0.0001  #0.0001
+                
+            stopLoss = (0.0025)     #0.0027  
+            profitTarget = (price + 0.0060)
+            
+            
+            if not self.Portfolio[symbol].Invested:
+                if rsi_value1 < self.overSold and rsi_value2 < self.overSold:
+                    self.MarketOrder(symbol, orderSize)
+                    self.stopMarketTicket = self.StopMarketOrder(symbol, -orderSize, (price - stopLoss))
+                elif rsi_value1 > self.overBought and rsi_value2 > self.overBought:
+                    self.MarketOrder(symbol, -orderSize)
+                    self.stopMarketTicket = self.StopMarketOrder(symbol, orderSize, price + stopLoss)
+            
+            
+            if self.Portfolio[symbol].IsLong:
+                if price > self.highestSYMBprice:
+                    self.highestSYMBprice = price
+                    updateFields = UpdateOrderFields()
+                    updateFields.StopPrice = price - stopLoss
+                    self.stopMarketTicket.Update(updateFields)
+            
+            elif self.Portfolio[symbol].IsShort:
+                if price < self.lowestSYMBprice:
+                    self.lowestSYMBprice = price
+                    updateFields = UpdateOrderFields()
+                    updateFields.StopPrice = stopLoss + price
+                    self.stopMarketTicket.Update(updateFields)
+                
+                
+            
+            
+            
+    # def OnOrderEvent(self, orderEvent):
+    #     order = self.Transactions.GetOrderById(orderEvent.OrderId)
+    #     if order.Status == OrderStatus.Filled:
+    #         if order.Type == OrderType.Limit or order.Type == OrderType.Limit:
+    #             self.Transactions.CancelOpenOrders(order.Symbol)
+                        
+    #     if order.Status == OrderStatus.Canceled:
+    #         self.Log(str(orderEvent))  
+        
+        
+        
+        
+        
+        
