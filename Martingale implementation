@@ -1,0 +1,81 @@
+This strategy follows the Martingale technique, which means doubling our risk and market exposition every time we have a losing trade.
+This strategy is not an investment advice, it was built for educational purposes only.
+
+class CasualFluorescentOrangeChinchilla(QCAlgorithm):
+
+    def Initialize(self):
+        
+        self.rsi_os = 30
+        
+        self.SetStartDate(2021, 1, 20)
+        #self.SetEndDate(2020, 12 ,30)
+        self.SetCash(1000) 
+        self.curr = 'EURUSD'
+        self.AddForex("EURUSD", Resolution.Hour)
+        self.rsi = self.RSI('EURUSD',  15)
+        
+        self.risk_pct = [0.0010]
+    
+    
+    def OnData(self, data):
+        if not self.rsi.IsReady:
+            return
+        
+        rsi_value = self.rsi.Current.Value
+        price = data['EURUSD'].Close
+        stopLoss = (price - 0.0020)       
+        profitTarget = (price + 0.0020)
+        
+        
+        
+        if rsi_value <  self.rsi_os:
+            
+            if not self.Portfolio['EURUSD'].Invested and  self.Portfolio['EURUSD'].LastTradeProfit < 0:
+                
+                margin = self.Portfolio.MarginRemaining
+                risk = self.risk_pct[-1] * 2
+                pipvalue = (margin * risk) / 20
+                orderSize = pipvalue / 0.0001
+                self.risk_pct.append(risk)
+                        
+                self.MarketOrder('EURUSD', orderSize)
+                self.StopMarketOrder('EURUSD', -orderSize, stopLoss)
+                self.LimitOrder('EURUSD', -orderSize, profitTarget)
+                
+                
+            elif not self.Portfolio['EURUSD'].Invested and self.Portfolio['EURUSD'].LastTradeProfit > 0:
+                
+                margin = self.Portfolio.MarginRemaining
+                risk = self.risk_pct[0]
+                pipvalue = (margin * risk) / 20
+                orderSize = pipvalue / 0.0001
+                
+                self.MarketOrder('EURUSD', orderSize)
+                self.StopMarketOrder('EURUSD', -orderSize, stopLoss)
+                self.LimitOrder('EURUSD', -orderSize, profitTarget)
+                
+                del self.risk_pct[1:]
+        
+            elif not self.Portfolio['EURUSD'].Invested:
+                
+                margin = self.Portfolio.MarginRemaining
+                risk = self.risk_pct[0]
+                pipvalue = (margin * risk) / 20
+                orderSize = pipvalue / 0.0001
+                
+                self.MarketOrder('EURUSD', orderSize)
+                self.StopMarketOrder('EURUSD', -orderSize, stopLoss)
+                self.LimitOrder('EURUSD', -orderSize, profitTarget)
+                
+                del self.risk_pct[1:]
+                
+        
+    def OnOrderEvent(self, orderEvent):
+        order = self.Transactions.GetOrderById(orderEvent.OrderId)
+        if order.Status == OrderStatus.Filled:
+            if order.Type == OrderType.Limit or order.Type == OrderType.Limit:
+                self.Transactions.CancelOpenOrders(order.Symbol)
+                        
+        if order.Status == OrderStatus.Canceled:
+            self.Log(str(orderEvent))
+               
