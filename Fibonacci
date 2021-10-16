@@ -1,0 +1,120 @@
+#This is an implementation of Fibonacci long/short strategy. The script places a trade whenever the price retraces around the 61.8 fibonacci value from the previous high/low.
+
+class RetrospectiveAsparagusMule(QCAlgorithm):
+
+    def Initialize(self):
+        
+        self.SetStartDate(2019, 12, 31)
+        self.SetEndDate(2020, 12, 30)
+        self.SetCash(1000) 
+        
+        self.SetTimeZone('Europe/Berlin')
+        self.curr = ['EURUSD']
+     
+        self.buffer = 0.0015
+        
+        self._previousLow = 0
+        self._previousHigh = 0
+        
+        for symbol in self.curr:
+            
+            self.eurusd = self.AddForex(symbol, Resolution.Hour).Symbol
+            self.SetBenchmark(symbol)
+            
+            self.Consolidate(self.eurusd, timedelta(hours=4), self.HourQuoteBarHandler)
+            self.window = RollingWindow[QuoteBar](70)
+        
+        
+    def HourQuoteBarHandler(self, quoteBar):
+        self.window.Add(quoteBar)
+        
+    def OnData(self, data):
+        
+        if not (self.window.IsReady):
+            return
+        
+        for symbol in self.curr:
+            self.prop = self.Securities[symbol].SymbolProperties
+            #self.pip = self.prop.MinimumPriceVariation
+            price = data[symbol].Close
+            margin = self.Portfolio.MarginRemaining
+            risk = 0.01
+            pipvalue =(margin * risk) / 300
+            orderSize = pipvalue /  self.prop.MinimumPriceVariation 
+            stopLoss = (price - 0.0030)       
+            profitTarget = (price + 0.0060)
+            
+            self.high_values = {}
+            self.low_values = {}
+            
+            # for quoteBar in list(self.window):
+            #     time = quoteBar.Time
+            #    endTime = quoteBar.EndTime
+            for i in range(70):
+                self.high_values[self.window[i].High] = self.window[i].Time
+                self.low_values[self.window[i].Low] = self.window[i].Time
+                
+            self._high = max(self.high_values.items())[0]
+            self._low = min(self.low_values.items())[0]
+                
+            self.golden_ratio = self._high - (self._high - self._low) * 0.618
+            self.downTrend_golden_ratio = self._high - (self._high - self._low) * (1- 0.618)
+            self.golden_range = self.golden_ratio - self.buffer
+            
+            # self.Log(str(max(time.items())[0]))
+            # self.Log(str(max(time.items())[1]))
+            
+            def buy_condition():
+                
+                if max(self.high_values.items())[1] > min(self.low_values.items())[1]:
+                    
+                    if self._low != 0 and self._low != self._previousLow and self._high != 0 and self._high != self._previousHigh:
+                    
+                        if price <= self.golden_ratio and price >= self.golden_range:
+                            return True          
+                            
+             def sell_condition():
+                
+                if max(self.high_values.items())[1] < min(self.low_values.items())[1]:
+                
+                    if self._low != 0 and self._low != self._previousLow and self._high != 0 and self._high != self._previousHigh:
+                        
+                        if price >= self.downTrend_golden_ratio and price <= self.downTrend_golden_ratio + self.buffer:
+                            return True
+             
+            if not self.Portfolio[symbol].Invested: 
+                            
+                if buy_condition():
+                            
+                            # self.Log('U ' + str(self._high))
+                            # self.Log('U ' + str(self._low))
+                            self._previousLow = self._low
+                            self._previousHigh = self._high
+              
+                            self.Buy(symbol, orderSize)
+                            self.StopMarketOrder(symbol, -orderSize, stopLoss)
+                            self.LimitOrder(symbol, -orderSize, profitTarget)
+                            self.high_values.clear()
+                            self.low_values.clear()
+            
+                elif sell_condition():
+                    
+                            # self.Log('D ' + str(self._high))
+                            # self.Log('D ' + str(self._low))
+                            self._previousLow = self._low
+                            self._previousHigh = self._high
+                            self.Sell(symbol, -orderSize)
+                            self.StopMarketOrder(symbol, orderSize, (price + 0.0030))
+                            self.LimitOrder(symbol, orderSize, (price - 0.0060))
+                            self.high_values.clear()
+                            self.low_values.clear()
+                
+                
+    def OnOrderEvent(self, orderEvent):
+        order = self.Transactions.GetOrderById(orderEvent.OrderId)
+        if order.Status == OrderStatus.Filled:
+            if order.Type == OrderType.Limit or order.Type == OrderType.StopMarket:
+                self.Transactions.CancelOpenOrders(order.Symbol)
+                        
+        if order.Status == OrderStatus.Canceled:
+            self.Log(str(orderEvent))
